@@ -1,3 +1,29 @@
+##### provider ######
+provider "aws" {
+region = "us-east-1"
+}
+
+
+##### instance resource #####
+resource "aws_instance" "myInst" {
+tags = {
+Name = "Server1"
+Environment = "Dev"
+}
+ami = "ami-004d1eaf8eaa0107d"
+instance_type = "t3.micro"
+key_name = "CICDkey"
+vpc_security_group_ids = [aws_security_group.mySG.id]
+availability_zone = "us-east-1a"
+root_block_device{
+volume_size = 10
+}
+}
+
+
+
+##### security resource ###
+
 resource "aws_security_group" "mySG"{
 name = "Terra-sG"
 description = "This security group is created using terraform and will be attached to Server1"
