@@ -1,0 +1,93 @@
+### taint command ###
+terraform taint resource-name
+terraform untaint resource-name
+
+###alternative for taint
+terraform apply --auto-approve -replace=resource-name
+
+### workspace command ###
+terraform workspace new name
+terraform workspace select name
+terraform workspace list
+
+
+#### provider ####
+provider "aws" {
+region = "us-east-1"
+}
+
+
+
+#### resource.tf #######
+resource "aws_instance" "myInstance" {
+tags = {
+Name = "${terraform.workspace}-Server-aps"
+Environment = "${terraform.workspace}"
+}
+ami = "ami-004d1eaf8eaa0107d"
+instance_type = local.instType[terraform.workspace]
+key_name = "CICDkey"
+vpc_security_group_ids = [aws_security_group.mySG.id]
+availability_zone = "us-east-1a"
+lifecycle{
+create_before_destroy = true
+prevent_destroy = true
+ignore_changes = [tags]
+}
+root_block_device {
+volume_size = local.volSize[terraform.workspace]
+}
+}
+
+
+
+#### locals ####
+locals {
+instType = {
+dev = "t3.micro"
+test = "c7i-flex.large"
+prod = "m7i-flex.large"
+}
+
+volSize = {
+dev = 8
+test = 10
+prod =15
+}
+}
+
+
+
+##### security  ######
+resource "aws_security_group" "mySG"{
+name = "${terraform.workspace}-Terra-sG"
+description = "This security group is created using terraform and will be attached to ${terraform.workspace}-Server"
+
+ingress {
+from_port = 22
+to_port = 22
+protocol = "tcp"
+cidr_blocks = ["0.0.0.0/0"]
+}
+
+ingress {
+from_port = 80
+to_port = 80
+protocol = "tcp"
+cidr_blocks = ["0.0.0.0/0"]
+}
+
+ingress {
+from_port = 8080
+to_port = 8081
+protocol = "tcp"
+cidr_blocks = ["0.0.0.0/0"]
+}
+
+egress {
+from_port = 0
+to_port = 0
+protocol = "-1"
+cidr_blocks = ["0.0.0.0/0"]
+}
+}
