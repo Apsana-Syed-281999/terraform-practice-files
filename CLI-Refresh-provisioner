@@ -1,0 +1,127 @@
+#### CLI ####
+terraform plan -var="type=t3.micro"
+terraform apply -var="type=t3.micro"
+terraform plan -var="type=t3.micro, vSize=10"
+
+#### Terraform drift -> Refresh ####
+terraform apply -refresh-only
+terraform plan -refresh-only
+
+
+### provider ####
+provider "aws" {
+region = "us-east-1"
+}
+
+
+#### key pair ###
+resource "aws_key_pair" "myKey" {
+key_name = "terra-key"
+public_key = file("/root/.ssh/id_rsa.pub")
+}
+
+
+### security allowing ssh -> 22 httpd -> 80 ####
+resource "aws_security_group" "mySG" {
+name = "Terra-SG"
+description = "Security group for Server1"
+
+ingress {
+from_port = 22
+to_port = 22
+protocol = "tcp"
+cidr_blocks = ["0.0.0.0/0"]
+}
+
+ingress {
+from_port = 80
+to_port = 80
+protocol = "tcp"
+cidr_blocks = ["0.0.0.0/0"]
+}
+
+
+egress {
+from_port = 0
+to_port = 0
+protocol = "-1"
+cidr_blocks = ["0.0.0.0/0"]
+}
+}
+
+
+### Local-exec ####
+resource "aws_instance" "myInstance" {
+tags = {
+Name = "Server1"
+Environment = "Dev"
+}
+ami = "ami-0567589d25e06853e"
+instance_type = "t3.micro"
+vpc_security_group_ids = [aws_security_group.mySG.id]
+key_name = aws_key_pair.myKey.key_name
+availability_zone = "us-east-1a"
+root_block_device {
+volume_size = 10
+}
+provisioner "local-exec" {
+command = "echo 'The instance id of Server is ${aws_instance.myInstance[0].id}' >> id.txt"
+}
+count = 1
+}
+
+
+
+##### remote-exec #####
+resource "aws_instance" "myInstance" {
+tags = {
+Name = "Server1"
+Environment = "Dev"
+}
+ami = "ami-0567589d25e06853e"
+instance_type = "t3.micro"
+vpc_security_group_ids = [aws_security_group.mySG.id]
+key_name = aws_key_pair.myKey.key_name
+availability_zone = "us-east-1a"
+root_block_device {
+volume_size = 10
+}
+provisioner "remote-exec" {
+connection {
+type = "ssh"
+user = "ec2-user"
+private_key = file("/root/.ssh/id_rsa")
+host = self.public_ip
+}
+inline = ["sudo apt update -y","sudo yum install httpd -y", "sudo systemctl start httpd"]
+}
+count = 1
+}
+
+
+#### file #####
+resource "aws_instance" "myInstance" {
+tags = {
+Name = "Server1"
+Environment = "Dev"
+}
+ami = "ami-0567589d25e06853e"
+instance_type = var.type
+vpc_security_group_ids = [aws_security_group.mySG.id]
+key_name = aws_key_pair.myKey.key_name
+availability_zone = "us-east-1a"
+root_block_device {
+volume_size = 10
+}
+provisioner "file" {
+connection {
+type = "ssh"
+user = "ec2-user"
+private_key = file("/root/.ssh/id_rsa")
+host = self.public_ip
+}
+source = "/root/id.txt"
+destination = "/home/ec2-user/id.txt"
+}
+count = 1
+}
