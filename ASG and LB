@@ -1,0 +1,162 @@
+### provider ###
+provider "aws" {
+  region = "us-east-1"
+}
+
+
+### VPC and it's components ###
+resource "aws_vpc" "myVPC" {
+  tags = {
+    Name = "Terra-VPC"
+  }
+  cidr_block           = "4.0.0.0/18"
+  instance_tenancy     = "default"
+  enable_dns_hostnames = "true"
+}
+
+resource "aws_subnet" "mySN1" {
+  vpc_id = aws_vpc.myVPC.id
+  tags = {
+    Name = "Terra-SN-1"
+  }
+  cidr_block        = "4.0.1.0/24"
+  availability_zone = "us-east-1a"
+}
+
+resource "aws_subnet" "mySN2" {
+  vpc_id = aws_vpc.myVPC.id
+  tags = {
+    Name = "Terra-SN-2"
+  }
+  cidr_block        = "4.0.2.0/24"
+  availability_zone = "us-east-1b"
+}
+
+resource "aws_internet_gateway" "myIGW" {
+  vpc_id = aws_vpc.myVPC.id
+  tags = {
+    Name = "Terra-IGW"
+  }
+}
+
+resource "aws_route_table" "myRT" {
+  vpc_id = aws_vpc.myVPC.id
+  tags = {
+    Name = "Terra-RT"
+  }
+  route {
+    gateway_id = aws_internet_gateway.myIGW.id
+    cidr_block = "0.0.0.0/0"
+  }
+}
+
+resource "aws_route_table_association" "myRS1" {
+  subnet_id      = aws_subnet.mySN1.id
+  route_table_id = aws_route_table.myRT.id
+}
+
+resource "aws_route_table_association" "myRS2" {
+  subnet_id      = aws_subnet.mySN2.id
+  route_table_id = aws_route_table.myRT.id
+}
+
+
+
+##### SG created in above VPC ####
+resource "aws_security_group" "mySG" {
+  name        = "terra-SG"
+  vpc_id      = aws_vpc.myVPC.id
+  description = "This SG is for instance created in myVPC zones"
+
+  ingress {
+    from_port   = "22"
+    to_port     = "22"
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    from_port   = "80"
+    to_port     = "80"
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = "0"
+    to_port     = "0"
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+
+
+##### LB , launch Template, ASG #####
+
+#### Load Balancer ####
+
+resource "aws_elb" "myELB" {
+  name            = "Terra-ELB"
+  subnets         = [aws_subnet.mySN1.id, aws_subnet.mySN2.id]
+  security_groups = [aws_security_group.mySG.id]
+  listener {
+    instance_protocol = "http"
+    instance_port     = "80"
+    lb_protocol       = "http"
+    lb_port           = "80"
+  }
+}
+
+#### Launch template####
+
+resource "aws_launch_template" "myLT" {
+  name                   = "Terra-LT"
+  image_id               = "ami-073f45061d35c86f0"
+  instance_type          = "t3.micro"
+  key_name               = "CICDkey"
+  vpc_security_group_ids = [aws_security_group.mySG.id]
+  tag_specifications {
+    resource_type = "instance"
+    tags = {
+      Name = "ASG-Server"
+    }
+  }
+  user_data = base64encode(<<-EOF
+#!/bin/bash
+sudo yum update -y
+sudo yum install httpd -y
+sudo systemctl start httpd
+sudo systemctl enable httpd
+echo '<h1>This is ASG-Server</h1>' | sudo tee /var/www/html/index.html
+EOF
+  )
+}
+
+
+##### Auto scaling group ###
+resource "aws_autoscaling_group" "myASG" {
+  name = "Terra-ASG"
+  launch_template {
+    id = aws_launch_template.myLT.id
+  }
+  desired_capacity    = 2
+  min_size            = 1
+  max_size            = 3
+  load_balancers      = [aws_elb.myELB.name]
+  vpc_zone_identifier = [aws_subnet.mySN1.id, aws_subnet.mySN2.id]
+}
+
+#### Auto scaling Policy ####
+resource "aws_autoscaling_policy" "myASP" {
+  name                      = "Terra-ASP"
+  autoscaling_group_name    = aws_autoscaling_group.myASG.name
+  policy_type               = "TargetTrackingScaling"
+  estimated_instance_warmup = 300
+  target_tracking_configuration {
+    predefined_metric_specification {
+      predefined_metric_type = "ASGAverageCPUUtilization"
+    }
+    target_value = 50.0
+  }
+}
