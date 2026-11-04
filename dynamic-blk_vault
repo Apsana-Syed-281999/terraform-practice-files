@@ -72,3 +72,24 @@ variable "token" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 }
+
+
+
+
+##### modules #####
+module "prod_compute" {
+source = "../../modules/compute"
+ami = "ami-0c230065b91270bc6"
+itype = "c7i-flex.large"
+name = "prod-inst"
+}
+
+module "prod_storage" {
+source = "../../modules/storage"
+s3 = "prod-apsana-flm-s3"
+}
+
+module "prod_nw" {
+source = "../../modules/nw"
+name = "prod-nw"
+}
