@@ -1,0 +1,74 @@
+
+### vault ####
+
+provider "vault" {
+  address = "http://44.200.230.70:8200/"
+  token   = var.token
+}
+
+data "vault_generic_secret" "terra-GS" {
+  path = "secret/Apsana"
+}
+
+
+#### provider with keys in vault #####
+
+provider "aws" {
+  region     = "us-east-1"
+  access_key = data.vault_generic_secret.terra-GS.data["access-key"]
+  secret_key = data.vault_generic_secret.terra-GS.data["secret-key"]
+}
+
+
+##### instance where instance_type is stored in vault #####
+ 
+  resource "aws_instance" "myInstance" {
+  tags = {
+    Name = "terra-Instance"
+  }
+  ami                    = "ami-0c230065b91270bc6"
+  instance_type          = data.vault_generic_secret.terra-GS.data["instance"]
+  key_name               = "CICDkey"
+  availability_zone      = "us-east-1a"
+  vpc_security_group_ids = [aws_security_group.mySG.id]
+  root_block_device {
+    volume_size = "10"
+  }
+}
+
+
+#### required variables ####
+variable "ports" {
+  type    = list(number)
+  default = ["22", "80", "8080", "9000"]
+}
+
+variable "token" {
+  type      = string
+  sensitive = true
+}
+
+
+
+
+#### Security with Dynamic block ####
+  resource "aws_security_group" "mySG" {
+  name        = "terra-SG"
+  description = "SG by using dynamic block"
+
+  dynamic "ingress" {
+    for_each = var.ports
+    content {
+      from_port   = ingress.value
+      to_port     = ingress.value
+      protocol    = "tcp"
+      cidr_blocks = ["0.0.0.0/0"]
+    }
+  }
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
