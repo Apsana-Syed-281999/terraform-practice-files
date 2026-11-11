@@ -1,0 +1,30 @@
+### pro ####
+provider "aws" {
+  alias  = "virginia"
+  region = "us-east-1"
+}
+
+provider "aws" {
+  alias  = "ohio"
+  region = "us-east-2"
+}
+
+
+#### Inst ####
+resource "aws_instance" "myInstVir" {
+  provider = aws.virginia
+  tags = {
+    Name = "Virginia-Inst"
+  }
+  ami           = "ami-09bf9dfeeb1e9adbc"
+  instance_type = "t3.micro"
+}
+
+resource "aws_instance" "myInstOhio" {
+  provider = aws.ohio
+  tags = {
+    Name = "Ohio-Inst"
+  }
+  ami           = "ami-03081c3f9c48b414e"
+  instance_type = "t3.micro"
+}
