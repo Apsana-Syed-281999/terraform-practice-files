@@ -1,0 +1,68 @@
+#### pro ####
+provider "aws" {
+  region = "us-east-1"
+}
+
+
+####Inst ####
+resource "aws_instance" "myInstance" {
+  tags = {
+    Name        = var.name[count.index]
+    Environment = var.env
+  }
+  ami               = var.ami
+  instance_type     = var.type ? "t3.micro" : "t3.small"
+  availability_zone = var.zone[count.index]
+  key_name          = "CICDkey"
+  root_block_device {
+    volume_size = var.size[count.index]
+  }
+  count = var.count_num
+}
+
+
+#### Var ####
+variable "name" {
+  type        = list(string)
+  default     = ["Terra-Inst1", "Terra-Inst2"]
+  description = "Variable holding value of Instance name"
+}
+
+variable "env" {
+  type    = string
+  default = "Dev"
+}
+
+variable "ami" {
+  type    = string
+  default = "ami-09bf9dfeeb1e9adbc"
+}
+
+variable "type" {
+  type    = bool
+  default = "true"
+}
+
+variable "zone" {
+  type    = list(string)
+  default = ["us-east-1a", "us-east-1b"]
+}
+
+variable "size" {
+  type    = list(number)
+  default = [10, 8]
+}
+
+variable "count_num" {
+  type    = number
+  default = 2
+}
+
+
+#### op ###
+output "Instance_ids" {
+  value = [aws_instance.myInstance[0].id]
+}
+output "Public_ip" {
+  value = [aws_instance.myInstance[0].public_ip]
+}
